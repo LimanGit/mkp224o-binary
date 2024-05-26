@@ -1,0 +1,66 @@
+name: Compile and Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # Replace with desired runner OS (if applicable)
+    strategy:
+      matrix:
+        target:  # Define target architectures and vendors here
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
+          - aarch64-unknown-linux-gnu
+          - # Add more targets for macOS, etc.
+        vendor:  # Optional: Specify cross-compiler vendors (if needed)
+          - gcc  # Use system-provided GCC (adjust based on platform)
+          - # Add alternatives like emscripten, etc.
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies (adjust for specific needs)
+        run: |
+          sudo apt update
+          sudo apt install -y gcc libc6-dev libsodium-dev make autoconf
+
+      - name: Configure Build Environment (adjust for specific toolchains)
+        env:
+          CC: ${{ matrix.vendor }}-clang  # Set cross-compiler based on vendor
+          CXX: ${{ matrix.vendor }}-clang++  # Set cross-compiler based on vendor
+          AR: ${{ matrix.vendor }}-ar  # Set cross-compiler tools if needed
+          RANLIB: ${{ matrix.vendor }}-ranlib  # Set cross-compiler tools if needed
+        run: |
+          if [[ ${{ matrix.target }} == *"windows"* ]]; then
+            # Handle Windows-specific tools (if applicable)
+            echo "Setting up Windows toolchain..."  # Placeholder
+          elif [[ ${{ matrix.target }} == *"aarch64"* ]]; then
+            # Handle ARM64-specific tools (if applicable)
+            echo "Setting up ARM64 toolchain..."  # Placeholder
+          else
+            echo "Using system-provided compilers..."
+          fi
+
+      - name: Generate Configure Script (if applicable)
+        run: ./autogen.sh
+
+      - name: Configure Build for Specific Target
+        run: ./configure --target=${{ matrix.target }}  # Add other configure flags as needed
+
+      - name: Build Executable
+        run: make
+
+      - name: Archive Executable
+        run: |
+          target_arch=${{ matrix.target%%-* }}  # Extract architecture from target
+          target_os=${{ matrix.target#*-* }}  # Extract OS from target
+          mv mkp224o "mkp224o-${target_arch}-${target_os}"  # Rename with architecture and OS
+
+      - name: Upload Artifacts (optional)
+        uses: actions/upload-artifact@v3
+        with:
+          name: executables
+          path: |
+            mkp224o-*  # Capture all archived executables
