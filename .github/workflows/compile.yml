@@ -1,65 +1,112 @@
 name: Compile and Release
 
 on:
-  workflow_dispatch
+  push:
+    tags:
+      - 'v*' # Trigger on tags like v1.0.0
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Replace with desired runner OS (if applicable)
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:  # Define target architectures and vendors here
-          - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
-          - aarch64-unknown-linux-gnu
-          - # Add more targets for macOS, etc.
-        vendor:  # Optional: Specify cross-compiler vendors (if needed)
-          - gcc  # Use system-provided GCC (adjust based on platform)
-          - # Add alternatives like emscripten, etc.
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: linux-amd64
+          - target: x86_64-pc-windows-gnu
+            os: windows-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: linux-arm64
+          - target: armv7-unknown-linux-gnueabihf
+            os: linux-armv7
+          - target: i686-pc-windows-gnu
+            os: windows-i686
+          - target: x86_64-apple-darwin
+            os: darwin-amd64
+          - target: aarch64-apple-darwin
+            os: darwin-arm64
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Dependencies (adjust for specific needs)
+      - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y gcc libc6-dev libsodium-dev make autoconf
+          sudo apt install -y gcc libc6-dev libsodium-dev make autoconf mingw-w64 binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
 
-      - name: Configure Build Environment (adjust for specific toolchains)
-        env:
-          CC: ${{ matrix.vendor }}-clang  # Set cross-compiler based on vendor
-          CXX: ${{ matrix.vendor }}-clang++  # Set cross-compiler based on vendor
-          AR: ${{ matrix.vendor }}-ar  # Set cross-compiler tools if needed
-          RANLIB: ${{ matrix.vendor }}-ranlib  # Set cross-compiler tools if needed
+      - name: Configure Build Environment
         run: |
-          if [[ ${{ matrix.target }} == *"windows"* ]]; then
-            # Handle Windows-specific tools (if applicable)
-            echo "Setting up Windows toolchain..."  # Placeholder
-          elif [[ ${{ matrix.target }} == *"aarch64"* ]]; then
-            # Handle ARM64-specific tools (if applicable)
-            echo "Setting up ARM64 toolchain..."  # Placeholder
-          else
-            echo "Using system-provided compilers..."
-          fi
+          case ${{ matrix.target }} in
+            x86_64-pc-windows-gnu)
+              export CC=x86_64-w64-mingw32-gcc
+              export CXX=x86_64-w64-mingw32-g++
+              export AR=x86_64-w64-mingw32-ar
+              export RANLIB=x86_64-w64-mingw32-ranlib
+              ;;
+            i686-pc-windows-gnu)
+              export CC=i686-w64-mingw32-gcc
+              export CXX=i686-w64-mingw32-g++
+              export AR=i686-w64-mingw32-ar
+              export RANLIB=i686-w64-mingw32-ranlib
+              ;;
+            aarch64-unknown-linux-gnu)
+              export CC=aarch64-linux-gnu-gcc
+              export CXX=aarch64-linux-gnu-g++
+              export AR=aarch64-linux-gnu-ar
+              export RANLIB=aarch64-linux-gnu-ranlib
+              ;;
+            armv7-unknown-linux-gnueabihf)
+              export CC=arm-linux-gnueabihf-gcc
+              export CXX=arm-linux-gnueabihf-g++
+              export AR=arm-linux-gnueabihf-ar
+              export RANLIB=arm-linux-gnueabihf-ranlib
+              ;;
+            *)
+              export CC=gcc
+              export CXX=g++
+              export AR=ar
+              export RANLIB=ranlib
+              ;;
+          esac
 
       - name: Generate Configure Script (if applicable)
         run: ./autogen.sh
 
       - name: Configure Build for Specific Target
-        run: ./configure --target=${{ matrix.target }}  # Add other configure flags as needed
+        run: ./configure --target=${{ matrix.target }}
 
       - name: Build Executable
         run: make
 
       - name: Archive Executable
         run: |
-          target_arch=${{ matrix.target%%-* }}  # Extract architecture from target
-          target_os=${{ matrix.target#*-* }}  # Extract OS from target
-          mv mkp224o "mkp224o-${target_arch}-${target_os}"  # Rename with architecture and OS
+          mkdir -p release
+          target_arch=${{ matrix.target%%-* }}
+          target_os=${{ matrix.target#*-* }}
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            mv mkp224o "release/mkp224o-${{ matrix.os }}.exe"
+          else
+            mv mkp224o "release/mkp224o-${{ matrix.os }}"
+          fi
 
-      - name: Upload Artifacts (optional)
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: executables
-          path: |
-            mkp224o-*  # Capture all archived executables
+          name: executables-${{ matrix.os }}
+          path: release/mkp224o-*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/mkp224o*
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
