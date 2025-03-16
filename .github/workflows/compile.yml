@@ -17,14 +17,12 @@ jobs:
             os: windows-amd64
           - target: aarch64-unknown-linux-gnu
             os: linux-arm64
-          - target: armv7-unknown-linux-gnueabihf
-            os: linux-armv7
-          - target: i686-pc-windows-gnu
-            os: windows-i686
           - target: x86_64-apple-darwin
             os: darwin-amd64
           - target: aarch64-apple-darwin
             os: darwin-arm64
+          - target: i686-pc-windows-gnu
+            os: windows-i686
 
     steps:
       - uses: actions/checkout@v3
@@ -32,7 +30,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y gcc libc6-dev libsodium-dev make autoconf mingw-w64 binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu jq
+          sudo apt install -y gcc libc6-dev libsodium-dev make autoconf mingw-w64 binutils-aarch64-linux-gnu jq
 
       - name: Configure Build Environment
         run: |
@@ -54,12 +52,6 @@ jobs:
               export CXX=aarch64-linux-gnu-g++
               export AR=aarch64-linux-gnu-ar
               export RANLIB=aarch64-linux-gnu-ranlib
-              ;;
-            armv7-unknown-linux-gnueabihf)
-              export CC=arm-linux-gnueabihf-gcc
-              export CXX=arm-linux-gnueabihf-g++
-              export AR=arm-linux-gnueabihf-ar
-              export RANLIB=arm-linux-gnueabihf-ranlib
               ;;
             *)
               export CC=gcc
